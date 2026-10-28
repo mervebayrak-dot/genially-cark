@@ -1,0 +1,179 @@
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body {
+    margin: 0;
+    padding: 16px;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    background: white;
+  }
+
+  .wheel-box {
+    position: relative;
+    width: min(88vw, 460px);
+    margin: auto;
+  }
+
+  canvas {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 50%;
+  }
+
+  .pointer {
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    width: 0;
+    height: 0;
+    border-left: 15px solid transparent;
+    border-right: 15px solid transparent;
+    border-top: 30px solid #222;
+  }
+
+  button {
+    margin-top: 18px;
+    padding: 12px 30px;
+    border: 0;
+    border-radius: 10px;
+    background: #17365D;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+  }
+
+  #result {
+    font-size: 24px;
+    font-weight: bold;
+    margin-top: 12px;
+    min-height: 29px;
+  }
+</style>
+</head>
+<body>
+
+<div class="wheel-box">
+  <div class="pointer"></div>
+  <canvas id="wheel" width="600" height="600"></canvas>
+</div>
+
+<button id="spin">SPIN</button>
+<div id="result" aria-live="polite"></div>
+
+<script>
+const words = [
+  "do", "a", "come", "is",
+  "my", "me", "to", "am",
+  "i", "but", "this", "look",
+  "and", "here", "like", "can"
+];
+
+// Bağlantıdaki ?word= değeri hedef kelimeyi belirler.
+const params = new URLSearchParams(window.location.search);
+const requestedWord = (params.get("word") || "here").toLowerCase();
+const target = words.indexOf(requestedWord);
+
+// Geçersiz kelime girilirse here kullanılır.
+const targetIndex = target >= 0 ? target : words.indexOf("here");
+
+const canvas = document.getElementById("wheel");
+const ctx = canvas.getContext("2d");
+const n = words.length;
+const slice = 2 * Math.PI / n;
+
+const colors = [
+  "#F9D66B", "#F6A6A6", "#9DD9D2", "#B9B5F5",
+  "#F6C58B", "#A9D6F5", "#E8A9D5", "#BDE3A5"
+];
+
+let rotation = 0;
+let busy = false;
+
+function draw() {
+  const r = canvas.width / 2;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(r, r);
+
+  words.forEach((word, i) => {
+    const start = -Math.PI / 2 + i * slice;
+    const end = start + slice;
+
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, r - 5, start, end);
+    ctx.closePath();
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fill();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.save();
+    ctx.rotate(start + slice / 2);
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#222";
+    ctx.font = "bold 23px Arial";
+    ctx.fillText(word, r - 24, 0, 145);
+    ctx.restore();
+  });
+
+  ctx.beginPath();
+  ctx.arc(0, 0, 23, 0, 2 * Math.PI);
+  ctx.fillStyle = "#17365D";
+  ctx.fill();
+  ctx.restore();
+}
+
+draw();
+
+document.getElementById("spin").addEventListener("click", () => {
+  if (busy) return;
+
+  busy = true;
+  document.getElementById("result").textContent = "";
+
+  const desired = (
+    360 - (targetIndex + 0.5) * 360 / n
+  ) % 360;
+
+  const current = ((rotation % 360) + 360) % 360;
+  const adjustment = (desired - current + 360) % 360;
+
+  const start = rotation;
+  const finish = rotation + 5 * 360 + adjustment;
+  const duration = 4000;
+  const began = performance.now();
+
+  function animate(now) {
+    const t = Math.min((now - began) / duration, 1);
+    const eased = 1 - Math.pow(1 - t, 4);
+
+    rotation = start + (finish - start) * eased;
+    canvas.style.transform = `rotate(${rotation}deg)`;
+
+    if (t < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      rotation = finish % 360;
+      canvas.style.transform = `rotate(${rotation}deg)`;
+      busy = false;
+      document.getElementById("result").textContent =
+        words[targetIndex];
+    }
+  }
+
+  requestAnimationFrame(animate);
+});
+</script>
+</body>
+</html>
