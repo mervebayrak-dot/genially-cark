@@ -76,12 +76,9 @@ const words = [
   "and", "here", "like", "can"
 ];
 
-// Bağlantıdaki ?word= değeri hedef kelimeyi belirler.
 const params = new URLSearchParams(window.location.search);
 const requestedWord = (params.get("word") || "here").toLowerCase();
 const target = words.indexOf(requestedWord);
-
-// Geçersiz kelime girilirse here kullanılır.
 const targetIndex = target >= 0 ? target : words.indexOf("here");
 
 const canvas = document.getElementById("wheel");
@@ -96,6 +93,43 @@ const colors = [
 
 let rotation = 0;
 let busy = false;
+
+// Dönerken çıkan kısa tıkırtı sesi
+let audioContext = null;
+let lastTick = 0;
+
+function playTick() {
+  try {
+    if (!audioContext) {
+      audioContext = new (
+        window.AudioContext || window.webkitAudioContext
+      )();
+    }
+
+    if (audioContext.state === "suspended") {
+      audioContext.resume();
+    }
+
+    const now = audioContext.currentTime;
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+
+    oscillator.type = "square";
+    oscillator.frequency.setValueAtTime(850, now);
+    oscillator.frequency.exponentialRampToValueAtTime(420, now + 0.025);
+
+    gain.gain.setValueAtTime(0.045, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+
+    oscillator.start(now);
+    oscillator.stop(now + 0.03);
+  } catch (error) {
+    // Ses desteklenmiyorsa çark yine çalışır.
+  }
+}
 
 function draw() {
   const r = canvas.width / 2;
@@ -142,6 +176,20 @@ document.getElementById("spin").addEventListener("click", () => {
   busy = true;
   document.getElementById("result").textContent = "";
 
+  if (!audioContext) {
+    try {
+      audioContext = new (
+        window.AudioContext || window.webkitAudioContext
+      )();
+    } catch (error) {}
+  }
+
+  if (audioContext && audioContext.state === "suspended") {
+    audioContext.resume();
+  }
+
+  lastTick = Math.floor(rotation / (360 / n));
+
   const desired = (
     360 - (targetIndex + 0.5) * 360 / n
   ) % 360;
@@ -160,6 +208,13 @@ document.getElementById("spin").addEventListener("click", () => {
 
     rotation = start + (finish - start) * eased;
     canvas.style.transform = `rotate(${rotation}deg)`;
+
+    const currentTick = Math.floor(rotation / (360 / n));
+
+    if (currentTick !== lastTick && t < 1) {
+      playTick();
+      lastTick = currentTick;
+    }
 
     if (t < 1) {
       requestAnimationFrame(animate);
